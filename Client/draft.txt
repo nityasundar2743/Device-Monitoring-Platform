@@ -1,0 +1,18 @@
+    try:
+        with collection2.watch() as stream:
+            for change in stream:
+                if change['operationType'] == 'insert':
+                    message = change['fullDocument']
+                    messages_list.append()
+                    print(f"Received new message: {message['text']}")
+                elif change['operationType'] == 'update':
+                    document_id = change['documentKey']['_id']
+                    updated_fields = change['updateDescription']['updatedFields']
+                    for message in messages_list:
+                        if message['_id'] == document_id:
+                            message.update(updated_fields)
+                            print(f"Updated message with ID {document_id}: {updated_fields}")
+                            break
+    
+    except OperationFailure:
+        print("Error: Change Streams not supported or connection failure.")
