@@ -49,7 +49,7 @@ interface Device {
 }
 
 export function Dashboard() {
-  const {toast} = useToast();
+  const { toast } = useToast()
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
   const [mergedData, setMergedData] = useState<Device[]>([])
@@ -77,6 +77,14 @@ export function Dashboard() {
         })
 
         setMergedData(merged)
+
+        // Update the selected device if it exists
+        if (selectedDevice) {
+          const updatedSelectedDevice = merged.find(device => device._id === selectedDevice._id)
+          if (updatedSelectedDevice) {
+            setSelectedDevice(updatedSelectedDevice)
+          }
+        }
       } catch (error) {
         console.error('Error fetching data:', error)
       }
@@ -87,7 +95,7 @@ export function Dashboard() {
     const intervalId = setInterval(fetchData, 10000)
 
     return () => clearInterval(intervalId)
-  }, [])
+  }, [selectedDevice])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
@@ -106,6 +114,15 @@ export function Dashboard() {
       })
 
       setMergedData(updatedDevices)
+
+      // Update the selected device if it exists
+      if (selectedDevice) {
+        const updatedSelectedDevice = updatedDevices.find(device => device._id === selectedDevice._id)
+        if (updatedSelectedDevice) {
+          setSelectedDevice(updatedSelectedDevice)
+        }
+      }
+
       toast({
         title: "Refresh Complete",
         description: "Device information has been updated.",
