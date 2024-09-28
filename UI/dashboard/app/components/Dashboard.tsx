@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import axios from "axios"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -8,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Laptop, Moon, Sun, ChevronRight, RefreshCw } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useToast } from "@/hooks/use-toast"
-import axios from "axios"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 interface UsageEntry {
   timestamp: string
@@ -48,11 +49,11 @@ interface Device {
 }
 
 export function Dashboard() {
+  const {toast} = useToast();
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
   const [mergedData, setMergedData] = useState<Device[]>([])
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const { toast } = useToast()
 
   useEffect(() => {
     const root = window.document.documentElement
@@ -83,7 +84,7 @@ export function Dashboard() {
 
     fetchData()
 
-    const intervalId = setInterval(fetchData, 20000)
+    const intervalId = setInterval(fetchData, 10000)
 
     return () => clearInterval(intervalId)
   }, [])
@@ -91,8 +92,6 @@ export function Dashboard() {
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500))  // Simulate API call
-      
       const [devicesResponse, usageResponse] = await Promise.all([
         axios.get<Device[]>('http://localhost:5000/api/devices'),
         axios.get<Device[]>('http://localhost:5000/api/usage'),
@@ -113,6 +112,11 @@ export function Dashboard() {
       })
     } catch (error) {
       console.error("Error refreshing data:", error)
+      toast({
+        title: "Refresh Failed",
+        description: "An error occurred while updating device information.",
+        variant: "destructive",
+      })
     }
     setIsRefreshing(false)
   }
@@ -188,7 +192,7 @@ export function Dashboard() {
                     transition={{ duration: 0.3 }}
                   >
                     <h2 className="text-2xl font-bold mb-4">{selectedDevice.Name}</h2>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4 mb-8">
                       {Object.entries(selectedDevice).map(([key, value]) => {
                         if (key !== '_id' && key !== 'Name' && !key.includes('History')) {
                           return (
@@ -199,6 +203,47 @@ export function Dashboard() {
                         }
                         return null
                       })}
+                    </div>
+                    <div className="space-y-8">
+                      <div>
+                        <h3 className="text-xl font-semibold mb-2">CPU Usage</h3>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <LineChart data={selectedDevice.cpuUsageHistory}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="timestamp" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Line type="monotone" dataKey="cpuUsage" stroke="#8884d8" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold mb-2">Memory Usage</h3>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <LineChart data={selectedDevice.memUsageHistory}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="timestamp" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Line type="monotone" dataKey="memoryUsage" stroke="#82ca9d" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold mb-2">Disk Usage</h3>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <LineChart data={selectedDevice.diskUsageHistory}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="timestamp" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Line type="monotone" dataKey="diskUsage" stroke="#ffc658" />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
                     </div>
                   </motion.div>
                 ) : (
