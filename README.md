@@ -21,7 +21,7 @@ A full-stack real-time dashboard for monitoring multiple devices' **CPU**, **mem
 
 - **Frontend:** Next.js 14+, TypeScript, Tailwind CSS
 - **Charts & UI:** Recharts, ShadCN UI, Radix UI, Framer Motion
-- **Backend:** FastAPI (Python), MongoDB
+- **Backend:** FastAPI (Python), MySQL
 - **Data Flow:** REST APIs
 
 ---
@@ -38,7 +38,7 @@ A full-stack real-time dashboard for monitoring multiple devices' **CPU**, **mem
 
 - Node.js (v18+)
 - Python 3.9+
-- MongoDB (local or Atlas)
+- mySQL
 
 ---
 
