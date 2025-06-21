@@ -28,7 +28,7 @@ A full-stack real-time dashboard for monitoring multiple devices' **CPU**, **mem
 
 ## 📸 Preview
 
-![Dashboard Screenshot](./public/screenshot.png) <!-- Replace with your image -->
+![Dashboard Screenshot](screenshot.png) <!-- Replace with your image -->
 
 ---
 
@@ -56,7 +56,7 @@ npm install
 npm run dev
 
 ---
-
+```
 ### 🧠 Backend Setup
 
 ```bash
