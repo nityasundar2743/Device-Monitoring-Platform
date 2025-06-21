@@ -39,23 +39,27 @@ class DevicePayload(BaseModel):
 def receive_data(payload: DevicePayload, session: Session = Depends(get_session)):
     try:
         # Auto timestamp if missing
-        timestamp = payload.timestamp or datetime.datetime.utcnow().isoformat()
-        entry = {
-            "userId": payload.userId,
-            "deviceId": payload.deviceId,
-            "metrics": payload.metrics,
-            "timestamp": timestamp
-        }
+        timestamp = payload.timestamp or datetime.utcnow().isoformat()
 
-        # Save to memory (replace with DB insert)
-        device_logs.append(entry)
-        print(f"✅ Received from {payload.deviceId}: {entry}")
+        # Create DB entry
+        log_entry = DeviceLog(
+            userId=payload.userId,
+            deviceId=payload.deviceId,
+            metrics=payload.metrics,
+            timestamp=timestamp
+        )
 
+        session.add(log_entry)
+        session.commit()
+        session.refresh(log_entry)
+
+        print(f"✅ Saved to DB from {payload.deviceId}: {log_entry}")
         return JSONResponse(status_code=201, content={"message": "Data received"})
 
     except Exception as e:
         print(f"❌ DB Error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/api/devices/logs")
 def get_logs(userId: Optional[str] = None, session: Session = Depends(get_session)):
