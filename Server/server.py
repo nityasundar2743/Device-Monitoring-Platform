@@ -1,41 +1,56 @@
-from pymongo import MongoClient
-import systemInfo
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+import uvicorn
 import datetime
 
-# MongoDB connection details
-MONGO_URI = 'mongodb+srv://nitya:1234@remotewatch.e6zcabc.mongodb.net/?retryWrites=true&w=majority&appName=RemoteWatch'
-DATABASE_NAME = 'RemoteWatch'
-COLLECTION_NAME = 'devices'
+app = FastAPI()
 
-def update_data():
-    # Sample data to insert into MongoDB
-    data_to_insert = systemInfo.get_system_info()
+# Allow frontend connections (update origins as needed)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Update to specific domains in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    # Create a MongoDB client
-    client = MongoClient(MONGO_URI)
-        
-    # Access the database and collection
-    db = client[DATABASE_NAME]
-    collection = db[COLLECTION_NAME]
-        
-    # Get system information
-    data_to_insert = systemInfo.get_system_info()
+# In-memory store (replace with DB logic)
+device_logs = []
 
-    # Update the data in the collection without deleting it
-    for data in data_to_insert:
-        collection.replace_one(
-            {"Name": data["Name"]},  # Filter by Name
-            data,  # Replace with data
-            upsert=True  # Insert the document if it doesn't exist
-        )
-        
-    print("data uploaded, Timestamp : " + datetime.datetime.now().time().strftime('%H:%M:%S'))
-        
-    # Close the MongoDB connection
-    client.close()
+# Pydantic model for incoming device data
+class DevicePayload(BaseModel):
+    deviceId: str
+    metrics: dict
+    timestamp: str = None  # Optional, will use current time if not provided
+
+@app.post("/api/devices/data")
+async def receive_device_data(payload: DevicePayload):
+    try:
+        # Auto timestamp if missing
+        timestamp = payload.timestamp or datetime.datetime.utcnow().isoformat()
+        entry = {
+            "deviceId": payload.deviceId,
+            "metrics": payload.metrics,
+            "timestamp": timestamp
+        }
+
+        # Save to memory (replace with DB insert)
+        device_logs.append(entry)
+        print(f"✅ Received from {payload.deviceId}: {entry}")
+
+        return JSONResponse(status_code=201, content={"message": "Data received"})
+
+    except Exception as e:
+        print(f"❌ Error receiving data: {e}")
+        return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
+
+@app.get("/api/devices/logs")
+def get_logs():
+    return {"logs": device_logs}
+
 
 if __name__ == "__main__":
-    while True:
-        update_data()
-
-    # update_data()
+    uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
