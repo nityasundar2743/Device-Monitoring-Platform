@@ -21,6 +21,7 @@ device_logs = []
 
 # Pydantic model for incoming device data
 class DevicePayload(BaseModel):
+    userId: str
     deviceId: str
     metrics: dict
     timestamp: str = None  # Optional, will use current time if not provided
@@ -31,6 +32,7 @@ async def receive_device_data(payload: DevicePayload):
         # Auto timestamp if missing
         timestamp = payload.timestamp or datetime.datetime.utcnow().isoformat()
         entry = {
+            "userId": payload.userId,
             "deviceId": payload.deviceId,
             "metrics": payload.metrics,
             "timestamp": timestamp
