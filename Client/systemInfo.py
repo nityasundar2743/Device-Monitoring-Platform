@@ -13,7 +13,6 @@ def get_system_info():
 
     # Basic system information
     info['device_id'] = platform.node()
-    info['name'] = platform.node()
     info['os'] = platform.uname().system + " " + platform.release()
     info['version'] = platform.version()
 

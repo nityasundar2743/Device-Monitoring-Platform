@@ -5,6 +5,8 @@ __pycache__/
 # Virtual environments
 venv/
 env/
+Client/venv/
+Server/venv/
 
 # Environment files
 .env
