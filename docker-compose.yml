@@ -1,0 +1,10 @@
+services:
+  server:
+    image: server-image-name
+    ports:
+      - '8000:8000'  # Adjust the port as needed
+  
+  client:
+    image: client-image-name
+    ports:
+      - '8010:8010'  # Adjust the port as neededs

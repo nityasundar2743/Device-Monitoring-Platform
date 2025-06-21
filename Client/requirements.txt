@@ -1,0 +1,6 @@
+requests
+psutil
+py-cpuinfo
+python-dotenv
+wmi
+pywin32
