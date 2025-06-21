@@ -24,3 +24,6 @@ desktop.ini
 # Logs & temps
 *.log
 *.tmp
+
+# node_modules
+Dashboard/node_modules/
