@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts"
-import { Laptop, Moon, Sun, ChevronRight, RefreshCw, Circle } from "lucide-react"
+import { Laptop, Moon, Sun, RefreshCw, Circle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,35 @@ interface UsageEntry {
   cpuUsage: number
   memoryUsage: number
   diskUsage: number
+}
+
+interface LogData {
+  deviceId: string
+  metrics: {
+    os: string
+    version: string
+    processor: string
+    architecture: string
+    physical_cores: number
+    logical_cores: number
+    max_frequency: number
+    total_memory: number
+    available_memory: number
+    used_memory: number
+    disk_total_space: number
+    disk_used_space: number
+    disk_free_space: number
+    disk_usage: number
+    total_bytes_sent: number
+    total_bytes_received: number
+    hostname: string
+    ip_address: string
+    uptime: string
+    cpu_avg: number
+    memory_avg: number
+    disk_avg: number
+  }
+  timestamp: string
 }
 
 interface Device {
@@ -60,6 +89,8 @@ export function Dashboard() {
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
   const [mergedData, setMergedData] = useState<Device[]>([])
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("theme")
@@ -74,11 +105,12 @@ export function Dashboard() {
   useEffect(() => {
     const fetchLogs = async () => {
       try {
+        setError(null)
         const res = await axios.get("http://localhost:8000/api/devices/logs?userId=nitya")
         const logs = res.data.logs
         const devicesMap: Record<string, Device> = {}
 
-        logs.forEach((log: any) => {
+        logs.forEach((log: LogData) => {
           const id = log.deviceId
           const metrics = log.metrics
           if (!devicesMap[id]) {
@@ -138,6 +170,9 @@ export function Dashboard() {
         setMergedData(Object.values(devicesMap))
       } catch (err) {
         console.error("Failed to fetch logs:", err)
+        setError("Unable to connect to monitoring server. Please ensure the server is running.")
+      } finally {
+        setIsLoading(false)
       }
     }
 
@@ -152,6 +187,7 @@ export function Dashboard() {
       await new Promise((res) => setTimeout(res, 1000)) // simulate
       toast({ title: "Refreshed", description: "Data updated." })
     } catch (error) {
+      console.error("Refresh error:", error)
       toast({
         title: "Refresh Failed",
         description: "Could not update device data.",
@@ -182,31 +218,99 @@ export function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Sidebar */}
           <Card className="h-[75vh] flex flex-col">
-            <CardHeader><CardTitle>Devices</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Laptop className="h-5 w-5" />
+                Devices
+                {mergedData.length > 0 && (
+                  <span className="text-sm font-normal text-gray-500">({mergedData.length})</span>
+                )}
+              </CardTitle>
+            </CardHeader>
             <CardContent className="flex-1">
               <ScrollArea className="h-full">
-                {mergedData.map(device => (
-                  <motion.div key={device._id} whileHover={{ scale: 1.02 }}>
-                    <Button
-                      variant={selectedDevice?._id === device._id ? "secondary" : "ghost"}
-                      className={`w-full justify-between mb-2 text-left ${selectedDevice?._id === device._id ? "bg-blue-100 dark:bg-blue-800" : ""}`}
-                      onClick={() => setSelectedDevice(device)}
+                {isLoading ? (
+                  <div className="flex items-center justify-center h-32">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : error ? (
+                  <div className="text-center py-8">
+                    <div className="text-red-500 mb-2">⚠️</div>
+                    <p className="text-sm text-gray-500 mb-4">{error}</p>
+                    <Button 
+                      onClick={handleRefresh} 
+                      variant="outline" 
+                      size="sm"
+                      className="mx-auto"
                     >
-                      <span className="flex items-center gap-2">
-                        <Laptop className="h-4 w-4" />
-                        {device.Name}
-                      </span>
-                      <Circle className="h-3 w-3 text-green-500" fill="currentColor" />
+                      Retry Connection
                     </Button>
-                  </motion.div>
-                ))}
+                  </div>
+                ) : mergedData.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Laptop className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No devices found</h3>
+                    <p className="text-sm text-gray-500 mb-4">Start the monitoring client to see devices here</p>
+                    <Button 
+                      onClick={handleRefresh} 
+                      variant="outline" 
+                      size="sm"
+                      className="mx-auto"
+                    >
+                      Check for devices
+                    </Button>
+                  </div>
+                ) : (
+                  mergedData.map(device => (
+                    <motion.div 
+                      key={device._id} 
+                      whileHover={{ scale: 1.02 }}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      <Button
+                        variant={selectedDevice?._id === device._id ? "secondary" : "ghost"}
+                        className={`w-full justify-between mb-2 text-left h-auto p-3 ${
+                          selectedDevice?._id === device._id 
+                            ? "bg-blue-100 dark:bg-blue-800 border-blue-300 dark:border-blue-600" 
+                            : "hover:bg-gray-50 dark:hover:bg-gray-800"
+                        }`}
+                        onClick={() => setSelectedDevice(device)}
+                      >
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="flex items-center gap-2 font-medium">
+                            <Laptop className="h-4 w-4" />
+                            {device.Name}
+                          </span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {device.OS} • {device.Architecture}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <Circle className="h-3 w-3 text-green-500" fill="currentColor" />
+                          <span className="text-xs text-gray-500">Online</span>
+                        </div>
+                      </Button>
+                    </motion.div>
+                  ))
+                )}
               </ScrollArea>
             </CardContent>
           </Card>
 
           {/* Details */}
           <Card className="md:col-span-2 h-[75vh] flex flex-col">
-            <CardHeader><CardTitle>Details</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Details
+                {selectedDevice && (
+                  <span className="text-sm font-normal text-gray-500">
+                    • {selectedDevice.Name}
+                  </span>
+                )}
+              </CardTitle>
+            </CardHeader>
             <CardContent className="overflow-y-auto">
               <AnimatePresence mode="wait">
                 {selectedDevice ? (
@@ -217,13 +321,23 @@ export function Dashboard() {
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
                   >
-                    <div className="flex flex-wrap justify-between items-center mb-2">
+                    <div className="flex flex-wrap justify-between items-center mb-4">
                       <h2 className="text-2xl font-bold">{selectedDevice.Name}</h2>
-                      <p className="text-sm text-muted-foreground">Last updated: {format(new Date(selectedDevice.Timestamp), "dd MMM yyyy, HH:mm:ss")}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Last updated: {format(new Date(selectedDevice.Timestamp), "dd MMM yyyy, HH:mm:ss")}
+                      </p>
                     </div>
-                    <div className="flex gap-2 mb-4">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">{selectedDevice.OS}</span>
-                      <span className="px-2 py-1 bg-gray-200 text-gray-800 text-xs rounded">{selectedDevice.Architecture}</span>
+                    <div className="flex gap-2 mb-6">
+                      <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-sm rounded-full font-medium">
+                        {selectedDevice.OS}
+                      </span>
+                      <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm rounded-full font-medium">
+                        {selectedDevice.Architecture}
+                      </span>
+                      <span className="px-3 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 text-sm rounded-full font-medium flex items-center gap-1">
+                        <Circle className="h-2 w-2" fill="currentColor" />
+                        Online
+                      </span>
                     </div>
 
                     <Accordion type="multiple" defaultValue={["general"]} className="space-y-4">
@@ -270,8 +384,22 @@ export function Dashboard() {
                     </div>
                   </motion.div>
                 ) : (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                    <p className="text-center text-gray-500">Select a device to view details</p>
+                  <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center h-full text-center py-16"
+                  >
+                    <div className="bg-gray-100 dark:bg-gray-800 rounded-full p-6 mb-6">
+                      <Laptop className="h-12 w-12 text-gray-400" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                      Select a device
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                      Choose a device from the sidebar to view detailed monitoring information including 
+                      system specs, resource usage, and real-time charts.
+                    </p>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -283,8 +411,17 @@ export function Dashboard() {
   )
 }
 
-function InfoItem({ label, value }: { label: string, value: any }) {
-  return <p><strong>• {label}:</strong> {value}</p>
+function InfoItem({ label, value }: { label: string, value: string | number }) {
+  return (
+    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+      <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">
+        {label}
+      </div>
+      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
+        {value}
+      </div>
+    </div>
+  )
 }
 
 function ChartCard({
@@ -295,38 +432,82 @@ function ChartCard({
   dataKey: string
   data: UsageEntry[] | undefined
 }) {
+  const hasData = data && data.length > 0
+  const latestValue = hasData ? data[data.length - 1]?.[dataKey as keyof UsageEntry] : 0
+
   return (
-    <div className="w-full">
-      <h3 className="text-lg font-semibold mb-2">{title}</h3>
-      <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis
-            dataKey="timestamp"
-            tickFormatter={(str) => format(new Date(str), "HH:mm")}
-          />
-          <YAxis domain={[0, 100]} />
-          <Tooltip
-            labelFormatter={(value) =>
-              new Date(value).toLocaleString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit"
-              })
-            }
-          />
-          <Legend />
-          <Area
-            type="monotone"
-            dataKey={dataKey}
-            stroke={color}
-            fill={color}
-            fillOpacity={0.3}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
+    <Card className="w-full">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base flex items-center justify-between">
+          {title}
+          {hasData && (
+            <span 
+              className="text-2xl font-bold" 
+              style={{ color }}
+            >
+              {typeof latestValue === 'number' ? latestValue.toFixed(1) : latestValue}%
+            </span>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {hasData ? (
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis
+                dataKey="timestamp"
+                tickFormatter={(str) => format(new Date(str), "HH:mm")}
+                fontSize={12}
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis 
+                domain={[0, 100]} 
+                fontSize={12}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => `${value}%`}
+              />
+              <Tooltip
+                labelFormatter={(value) =>
+                  new Date(value).toLocaleString("en-GB", {
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                  })
+                }
+                formatter={(value: number) => [`${value.toFixed(1)}%`, title]}
+                contentStyle={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey={dataKey}
+                stroke={color}
+                fill={color}
+                fillOpacity={0.2}
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-[200px] flex items-center justify-center text-gray-500 dark:text-gray-400">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                📊
+              </div>
+              <p className="text-sm">No data available</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

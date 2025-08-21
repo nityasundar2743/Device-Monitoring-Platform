@@ -1,10 +1,95 @@
+version: '3.8'
+
 services:
+  # MySQL Database
+  database:
+    image: mysql:8.0
+    container_name: device-monitoring-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: device_monitoring
+      MYSQL_USER: monitoring_user
+      MYSQL_PASSWORD: monitoring_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - monitoring-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # FastAPI Server
   server:
-    image: server-image-name
+    build: 
+      context: ./Server
+      dockerfile: Dockerfile
+    container_name: device-monitoring-server
+    restart: unless-stopped
     ports:
-      - '8000:8000'  # Adjust the port as needed
-  
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://monitoring_user:monitoring_password@database:3306/device_monitoring
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - monitoring-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/devices/logs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Next.js Dashboard
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: device-monitoring-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - monitoring-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Python Client (optional - for testing)
   client:
-    image: client-image-name
-    ports:
-      - '8010:8010'  # Adjust the port as neededs
+    build:
+      context: ./Client
+      dockerfile: Dockerfile
+    container_name: device-monitoring-client
+    restart: unless-stopped
+    environment:
+      - USER_ID=docker-client
+      - SERVER_URL=http://server:8000/api/devices/data
+      - SEND_INTERVAL=10
+      - MAX_RETRIES=5
+      - RETRY_DELAY=5
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - monitoring-network
+    # Note: The client will monitor the container's resources, not the host
+    # For host monitoring, run the client directly on the host machine
+
+volumes:
+  db_data:
+
+networks:
+  monitoring-network:
+    driver: bridge
