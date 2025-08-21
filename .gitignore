@@ -1,18 +1,28 @@
 # Bytecode and cache
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
 
 # Virtual environments
 venv/
 env/
+ENV/
+.venv/
 Client/venv/
 Server/venv/
 
 # Environment files
 .env
 .env.*
+!.env.example
 Client/.env
 Server/.env
+dashboard/.env
+dashboard/.env.local
+dashboard/.env.development.local
+dashboard/.env.test.local
+dashboard/.env.production.local
 
 # IDE & OS files
 .DS_Store
@@ -20,10 +30,137 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+*.swp
+*.swo
 
 # Logs & temps
 *.log
 *.tmp
+logs/
+*.out
 
-# node_modules
-Dashboard/node_modules/
+# Node.js
+node_modules/
+dashboard/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js
+dashboard/.next/
+dashboard/out/
+dashboard/next-env.d.ts
+dashboard/.vercel
+dashboard/.eslintcache
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+.tox/
+
+# Database
+*.db
+*.sqlite3
+data/
+mysql_data/
+
+# Docker
+.docker/
+docker-data/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+coverage.xml
+*.cover
+.nyc_output
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Distribution / packaging
+.Python
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Translations
+*.mo
+*.pot
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

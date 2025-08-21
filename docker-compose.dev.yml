@@ -1,0 +1,77 @@
+version: '3.8'
+
+# Development docker-compose configuration
+# Use this for local development with hot reloading
+
+services:
+  # MySQL Database
+  database:
+    image: mysql:8.0
+    container_name: device-monitoring-db-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: device_monitoring
+      MYSQL_USER: monitoring_user
+      MYSQL_PASSWORD: monitoring_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data_dev:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - monitoring-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # FastAPI Server (Development mode with hot reload)
+  server-dev:
+    build: 
+      context: ./Server
+      dockerfile: Dockerfile.dev
+    container_name: device-monitoring-server-dev
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://monitoring_user:monitoring_password@database:3306/device_monitoring
+      - DEBUG=true
+      - RELOAD=true
+    volumes:
+      - ./Server:/app
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - monitoring-network
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # Next.js Dashboard (Development mode with hot reload)
+  dashboard-dev:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile.dev
+    container_name: device-monitoring-dashboard-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NODE_ENV=development
+    volumes:
+      - ./dashboard:/app
+      - /app/node_modules
+    depends_on:
+      - server-dev
+    networks:
+      - monitoring-network
+    command: ["npm", "run", "dev"]
+
+volumes:
+  db_data_dev:
+
+networks:
+  monitoring-network:
+    driver: bridge
