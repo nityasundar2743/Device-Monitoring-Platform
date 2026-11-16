@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState, useCallback, useMemo } from "react"
 import axios from "axios"
 import { format } from "date-fns"
 import { AnimatePresence, motion } from "framer-motion"
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from "recharts"
-import { Laptop, Moon, Sun, ChevronRight, RefreshCw, Circle } from "lucide-react"
+import { Laptop, Moon, Sun, RefreshCw, Circle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,39 @@ interface UsageEntry {
   cpuUsage: number
   memoryUsage: number
   diskUsage: number
+}
+
+interface RawMetrics {
+  os?: string
+  version?: string
+  processor?: string
+  architecture?: string
+  physical_cores?: number
+  logical_cores?: number
+  max_frequency?: number
+  total_memory?: number
+  available_memory?: number
+  used_memory?: number
+  disk_total_space?: number
+  disk_used_space?: number
+  disk_free_space?: number
+  disk_usage?: number
+  total_bytes_sent?: number | string
+  total_bytes_received?: number | string
+  hostname?: string
+  ip_address?: string
+  uptime?: string
+  cpu_avg?: number
+  memory_avg?: number
+  disk_avg?: number
+}
+
+interface RawLog {
+  id?: number
+  userId?: string
+  deviceId: string
+  metrics: RawMetrics
+  timestamp: string
 }
 
 interface Device {
@@ -54,12 +87,45 @@ interface Device {
   diskUsageHistory?: UsageEntry[]
 }
 
+interface DeviceListItemProps {
+  device: Device
+  isSelected: boolean
+  onSelect: (deviceId: string) => void
+}
+
+const DeviceListItem = React.memo(function DeviceListItem({
+  device,
+  isSelected,
+  onSelect
+}: DeviceListItemProps) {
+  return (
+    <motion.div whileHover={{ scale: 1.02 }}>
+      <Button
+        variant={isSelected ? "secondary" : "ghost"}
+        className={`w-full justify-between mb-2 text-left ${isSelected ? "bg-blue-100 dark:bg-blue-800" : ""}`}
+        onClick={() => onSelect(device._id)}
+      >
+        <span className="flex items-center gap-2">
+          <Laptop className="h-4 w-4" />
+          {device.Name}
+        </span>
+        <Circle className="h-3 w-3 text-green-500" fill="currentColor" />
+      </Button>
+    </motion.div>
+  )
+})
+
 export function Dashboard() {
   const { toast } = useToast()
   const [isDarkMode, setIsDarkMode] = useState(false)
-  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
   const [mergedData, setMergedData] = useState<Device[]>([])
   const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const selectedDevice = useMemo(() => {
+    if (!selectedDeviceId) return null
+    return mergedData.find((d) => d._id === selectedDeviceId) ?? null
+  }, [mergedData, selectedDeviceId])
 
   useEffect(() => {
     const storedTheme = localStorage.getItem("theme")
@@ -71,95 +137,119 @@ export function Dashboard() {
     localStorage.setItem("theme", isDarkMode ? "dark" : "light")
   }, [isDarkMode])
 
-  useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        const res = await axios.get("http://localhost:8000/api/devices/logs?userId=nitya")
-        const logs = res.data.logs
-        const devicesMap: Record<string, Device> = {}
+  const fetchLogs = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const res = await axios.get("http://localhost:8000/api/devices/logs?userId=nitya", { signal })
+      const logs: RawLog[] = res.data.logs || []
+      const devicesMap: Record<string, Device> = {}
 
-        logs.forEach((log: any) => {
-          const id = log.deviceId
-          const metrics = log.metrics
-          if (!devicesMap[id]) {
-            devicesMap[id] = {
-              _id: id,
-              Name: id,
-              OS: metrics.os,
-              Version: metrics.version,
-              Status: "active",
-              Processor: metrics.processor,
-              Architecture: metrics.architecture,
-              'Physical cores': metrics.physical_cores,
-              'Logical cores': metrics.logical_cores,
-              'Max Frequency': metrics.max_frequency,
-              'Current Frequency': metrics.max_frequency,
-              'Total Memory': metrics.total_memory,
-              'Available Memory': metrics.available_memory,
-              'Used Memory': metrics.used_memory,
-              'Disk Total Space': metrics.disk_total_space,
-              'Disk Used Space': metrics.disk_used_space,
-              'Disk Free Space': metrics.disk_free_space,
-              'Disk Usage': metrics.disk_usage,
-              'Total Bytes Sent': metrics.total_bytes_sent.toString(),
-              'Total Bytes Received': metrics.total_bytes_received.toString(),
-              Hostname: metrics.hostname,
-              'IP Address': metrics.ip_address,
-              Uptime: metrics.uptime,
-              Timestamp: log.timestamp,
-              cpuUsageHistory: [],
-              memUsageHistory: [],
-              diskUsageHistory: []
-            }
+      logs.forEach((log) => {
+        const id = log.deviceId
+        const metrics = log.metrics || {}
+        if (!devicesMap[id]) {
+          devicesMap[id] = {
+            _id: id,
+            Name: id,
+            OS: metrics.os || "Unknown",
+            Version: metrics.version || "",
+            Status: "active",
+            Processor: metrics.processor || "Unknown",
+            Architecture: metrics.architecture || "",
+            'Physical cores': metrics.physical_cores ?? 0,
+            'Logical cores': metrics.logical_cores ?? 0,
+            'Max Frequency': metrics.max_frequency ?? 0,
+            'Current Frequency': metrics.max_frequency ?? 0,
+            'Total Memory': metrics.total_memory ?? 0,
+            'Available Memory': metrics.available_memory ?? 0,
+            'Used Memory': metrics.used_memory ?? 0,
+            'Disk Total Space': metrics.disk_total_space ?? 0,
+            'Disk Used Space': metrics.disk_used_space ?? 0,
+            'Disk Free Space': metrics.disk_free_space ?? 0,
+            'Disk Usage': metrics.disk_usage ?? 0,
+            'Total Bytes Sent': (metrics.total_bytes_sent ?? 0).toString(),
+            'Total Bytes Received': (metrics.total_bytes_received ?? 0).toString(),
+            Hostname: metrics.hostname || "",
+            'IP Address': metrics.ip_address || "",
+            Uptime: metrics.uptime || "",
+            Timestamp: log.timestamp,
+            cpuUsageHistory: [],
+            memUsageHistory: [],
+            diskUsageHistory: []
           }
+        } else {
+          devicesMap[id].Timestamp = log.timestamp
+          if (metrics.used_memory !== undefined) devicesMap[id]['Used Memory'] = metrics.used_memory
+          if (metrics.available_memory !== undefined) devicesMap[id]['Available Memory'] = metrics.available_memory
+          if (metrics.disk_used_space !== undefined) devicesMap[id]['Disk Used Space'] = metrics.disk_used_space
+          if (metrics.disk_free_space !== undefined) devicesMap[id]['Disk Free Space'] = metrics.disk_free_space
+          if (metrics.disk_usage !== undefined) devicesMap[id]['Disk Usage'] = metrics.disk_usage
+          if (metrics.uptime) devicesMap[id].Uptime = metrics.uptime
+        }
 
-          devicesMap[id].cpuUsageHistory?.push({
-            timestamp: log.timestamp,
-            cpuUsage: metrics.cpu_avg,
-            memoryUsage: metrics.memory_avg,
-            diskUsage: metrics.disk_avg
-          })
+        const entry: UsageEntry = {
+          timestamp: log.timestamp,
+          cpuUsage: metrics.cpu_avg ?? 0,
+          memoryUsage: metrics.memory_avg ?? 0,
+          diskUsage: metrics.disk_avg ?? 0
+        }
 
-          devicesMap[id].memUsageHistory?.push({
-            timestamp: log.timestamp,
-            cpuUsage: metrics.cpu_avg,
-            memoryUsage: metrics.memory_avg,
-            diskUsage: metrics.disk_avg
-          })
+        devicesMap[id].cpuUsageHistory?.push(entry)
+        devicesMap[id].memUsageHistory?.push(entry)
+        devicesMap[id].diskUsageHistory?.push(entry)
+      })
 
-          devicesMap[id].diskUsageHistory?.push({
-            timestamp: log.timestamp,
-            cpuUsage: metrics.cpu_avg,
-            memoryUsage: metrics.memory_avg,
-            diskUsage: metrics.disk_avg
-          })
-        })
+      // Limit usage histories to the most recent 100 entries for fast chart rendering
+      Object.values(devicesMap).forEach((device) => {
+        if (device.cpuUsageHistory && device.cpuUsageHistory.length > 100) {
+          device.cpuUsageHistory = device.cpuUsageHistory.slice(-100)
+        }
+        if (device.memUsageHistory && device.memUsageHistory.length > 100) {
+          device.memUsageHistory = device.memUsageHistory.slice(-100)
+        }
+        if (device.diskUsageHistory && device.diskUsageHistory.length > 100) {
+          device.diskUsageHistory = device.diskUsageHistory.slice(-100)
+        }
+      })
 
-        setMergedData(Object.values(devicesMap))
-      } catch (err) {
-        console.error("Failed to fetch logs:", err)
-      }
+      setMergedData(Object.values(devicesMap))
+    } catch (err: unknown) {
+      if (axios.isCancel(err)) return
+      console.error("Failed to fetch logs:", err)
     }
-
-    fetchLogs()
-    const interval = setInterval(fetchLogs, 10000)
-    return () => clearInterval(interval)
   }, [])
 
-  const handleRefresh = async () => {
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchLogs(controller.signal)
+    const interval = setInterval(() => {
+      fetchLogs(controller.signal)
+    }, 10000)
+
+    return () => {
+      controller.abort()
+      clearInterval(interval)
+    }
+  }, [fetchLogs])
+
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true)
     try {
-      await new Promise((res) => setTimeout(res, 1000)) // simulate
+      await fetchLogs()
       toast({ title: "Refreshed", description: "Data updated." })
     } catch (error) {
       toast({
         title: "Refresh Failed",
-        description: "Could not update device data.",
+        description: error instanceof Error ? error.message : "Could not update device data.",
         variant: "destructive"
       })
+    } finally {
+      setIsRefreshing(false)
     }
-    setIsRefreshing(false)
-  }
+  }, [fetchLogs, toast])
+
+  const handleSelectDevice = useCallback((deviceId: string) => {
+    setSelectedDeviceId(deviceId)
+  }, [])
 
   return (
     <div className={`min-h-screen p-4 sm:p-8 ${isDarkMode ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"}`}>
@@ -185,20 +275,13 @@ export function Dashboard() {
             <CardHeader><CardTitle>Devices</CardTitle></CardHeader>
             <CardContent className="flex-1">
               <ScrollArea className="h-full">
-                {mergedData.map(device => (
-                  <motion.div key={device._id} whileHover={{ scale: 1.02 }}>
-                    <Button
-                      variant={selectedDevice?._id === device._id ? "secondary" : "ghost"}
-                      className={`w-full justify-between mb-2 text-left ${selectedDevice?._id === device._id ? "bg-blue-100 dark:bg-blue-800" : ""}`}
-                      onClick={() => setSelectedDevice(device)}
-                    >
-                      <span className="flex items-center gap-2">
-                        <Laptop className="h-4 w-4" />
-                        {device.Name}
-                      </span>
-                      <Circle className="h-3 w-3 text-green-500" fill="currentColor" />
-                    </Button>
-                  </motion.div>
+                {mergedData.map((device) => (
+                  <DeviceListItem
+                    key={device._id}
+                    device={device}
+                    isSelected={selectedDeviceId === device._id}
+                    onSelect={handleSelectDevice}
+                  />
                 ))}
               </ScrollArea>
             </CardContent>
@@ -219,7 +302,16 @@ export function Dashboard() {
                   >
                     <div className="flex flex-wrap justify-between items-center mb-2">
                       <h2 className="text-2xl font-bold">{selectedDevice.Name}</h2>
-                      <p className="text-sm text-muted-foreground">Last updated: {format(new Date(selectedDevice.Timestamp), "dd MMM yyyy, HH:mm:ss")}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Last updated:{" "}
+                        {(() => {
+                          try {
+                            return format(new Date(selectedDevice.Timestamp), "dd MMM yyyy, HH:mm:ss")
+                          } catch {
+                            return selectedDevice.Timestamp
+                          }
+                        })()}
+                      </p>
                     </div>
                     <div className="flex gap-2 mb-4">
                       <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">{selectedDevice.OS}</span>
@@ -258,7 +350,7 @@ export function Dashboard() {
                           <InfoItem label="Disk Total Space" value={selectedDevice["Disk Total Space"]} />
                           <InfoItem label="Disk Used Space" value={selectedDevice["Disk Used Space"]} />
                           <InfoItem label="Disk Free Space" value={selectedDevice["Disk Free Space"]} />
-                          <InfoItem label="Disk Usage" value={selectedDevice["Disk Usage"] + " %"} />
+                          <InfoItem label="Disk Usage" value={`${selectedDevice["Disk Usage"]} %`} />
                         </AccordionContent>
                       </AccordionItem>
                     </Accordion>
@@ -283,11 +375,11 @@ export function Dashboard() {
   )
 }
 
-function InfoItem({ label, value }: { label: string, value: any }) {
-  return <p><strong>• {label}:</strong> {value}</p>
-}
+const InfoItem = React.memo(function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
+  return <p><strong>• {label}:</strong> {value ?? "N/A"}</p>
+})
 
-function ChartCard({
+const ChartCard = React.memo(function ChartCard({
   title, color, dataKey, data
 }: {
   title: string
@@ -303,19 +395,29 @@ function ChartCard({
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis
             dataKey="timestamp"
-            tickFormatter={(str) => format(new Date(str), "HH:mm")}
+            tickFormatter={(str) => {
+              try {
+                return format(new Date(str), "HH:mm")
+              } catch {
+                return String(str)
+              }
+            }}
           />
           <YAxis domain={[0, 100]} />
           <Tooltip
-            labelFormatter={(value) =>
-              new Date(value).toLocaleString("en-GB", {
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit"
-              })
-            }
+            labelFormatter={(value) => {
+              try {
+                return new Date(value).toLocaleString("en-GB", {
+                  day: "2-digit",
+                  month: "short",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit"
+                })
+              } catch {
+                return String(value)
+              }
+            }}
           />
           <Legend />
           <Area
@@ -324,9 +426,10 @@ function ChartCard({
             stroke={color}
             fill={color}
             fillOpacity={0.3}
+            isAnimationActive={false}
           />
         </AreaChart>
       </ResponsiveContainer>
     </div>
   )
-}
+})
